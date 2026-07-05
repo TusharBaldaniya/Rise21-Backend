@@ -138,6 +138,9 @@ app.use('/api/checkins', checkinRoutes);
 app.use('/api/journal', journalRoutes);
 app.use('/api/wallet', walletRoutes);
 app.use('/api/insights', insightsRoutes);
+app.get('/api/health', (req, res) => {
+  res.send('OK');
+})
 
 // Daily Quote Endpoint
 app.get('/api/quote', (req, res) => {
