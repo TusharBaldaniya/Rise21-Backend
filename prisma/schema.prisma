@@ -1,0 +1,88 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id           String              @id @default(uuid())
+  username     String              @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime            @default(now())
+  challenges   Challenge[]
+  checkIns     DailyCheckIn[]
+  mindLogs     MindCheckLog[]
+  reflections  Reflection[]
+  transactions WalletTransaction[]
+}
+
+model Challenge {
+  id            String         @id @default(uuid())
+  userId        String
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title         String
+  description   String?
+  startDate     DateTime
+  endDate       DateTime
+  durationDays  Int
+  dailyTarget   String
+  penaltyAmount Float          @default(0)
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  checkIns      DailyCheckIn[]
+}
+
+model DailyCheckIn {
+  id             String    @id @default(uuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  challengeId    String
+  challenge      Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  date           String    // Format: YYYY-MM-DD
+  status         String    // "completed" | "missed"
+  reason         String?
+  penaltyCharged Float     @default(0)
+  createdAt      DateTime  @default(now())
+
+  @@unique([challengeId, date])
+}
+
+model MindCheckLog {
+  id             String   @id @default(uuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date           String   // Format: YYYY-MM-DD
+  triggerName    String
+  penaltyAmount  Float
+  createdAt      DateTime @default(now())
+}
+
+model Reflection {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date        String   // Format: YYYY-MM-DD
+  goodThing   String
+  mistake     String
+  improvement String
+  gratitude   String
+  createdAt   DateTime @default(now())
+
+  @@unique([date, userId])
+}
+
+model WalletTransaction {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date        String   // Format: YYYY-MM-DD
+  type        String   // "charge" | "redirection"
+  amount      Float
+  category    String   // e.g. "Challenge Penalty", "Mind Check Trigger", "Charity Redirection"
+  description String
+  createdAt   DateTime @default(now())
+}
