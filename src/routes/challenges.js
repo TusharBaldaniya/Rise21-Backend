@@ -7,7 +7,7 @@ const router = express.Router();
 // Create a new challenge
 router.post('/', authMiddleware, async (req, res) => {
   try {
-    const { title, description, startDate, endDate, durationDays, dailyTarget, penaltyAmount } = req.body;
+    const { title, description, startDate, endDate, durationDays, dailyTarget, penaltyAmount, icon, whyStarted } = req.body;
 
     if (!title || !startDate || !endDate || !durationDays || !dailyTarget) {
       return res.status(400).json({ error: 'Title, start date, end date, duration, and daily target are required.' });
@@ -23,7 +23,9 @@ router.post('/', authMiddleware, async (req, res) => {
         durationDays: parseInt(durationDays, 10),
         dailyTarget,
         penaltyAmount: parseFloat(penaltyAmount || 0),
-        isActive: true
+        isActive: true,
+        icon: icon || '🎯',
+        whyStarted: whyStarted || ''
       }
     });
 
@@ -39,6 +41,11 @@ router.get('/', authMiddleware, async (req, res) => {
   try {
     const challenges = await prisma.challenge.findMany({
       where: { userId: req.userId },
+      include: {
+        checkIns: {
+          orderBy: { date: 'asc' }
+        }
+      },
       orderBy: { createdAt: 'desc' }
     });
 
@@ -123,6 +130,41 @@ router.delete('/:id', authMiddleware, async (req, res) => {
   } catch (error) {
     console.error('Challenge delete error:', error);
     res.status(500).json({ error: 'Could not delete challenge.' });
+  }
+});
+
+// Update a challenge (e.g. edit title/details)
+router.put('/:id', authMiddleware, async (req, res) => {
+  try {
+    const { title, description, dailyTarget, penaltyAmount, icon, whyStarted } = req.body;
+    
+    const challenge = await prisma.challenge.findFirst({
+      where: {
+        id: req.params.id,
+        userId: req.userId
+      }
+    });
+
+    if (!challenge) {
+      return res.status(404).json({ error: 'Challenge not found.' });
+    }
+
+    const updated = await prisma.challenge.update({
+      where: { id: challenge.id },
+      data: {
+        title: title !== undefined ? title : challenge.title,
+        description: description !== undefined ? description : challenge.description,
+        dailyTarget: dailyTarget !== undefined ? dailyTarget : challenge.dailyTarget,
+        penaltyAmount: penaltyAmount !== undefined ? parseFloat(penaltyAmount) : challenge.penaltyAmount,
+        icon: icon !== undefined ? icon : challenge.icon,
+        whyStarted: whyStarted !== undefined ? whyStarted : challenge.whyStarted
+      }
+    });
+
+    res.json(updated);
+  } catch (error) {
+    console.error('Challenge update error:', error);
+    res.status(500).json({ error: 'Could not update challenge.' });
   }
 });
 

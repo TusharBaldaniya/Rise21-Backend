@@ -135,7 +135,7 @@ router.get('/reflection', authMiddleware, async (req, res) => {
 // Create or update reflection
 router.post('/reflection', authMiddleware, async (req, res) => {
   try {
-    const { date, goodThing, mistake, improvement, gratitude } = req.body;
+    const { date, goodThing, mistake, improvement, gratitude, mood } = req.body;
 
     if (!date) {
       return res.status(400).json({ error: 'Date is required.' });
@@ -152,7 +152,8 @@ router.post('/reflection', authMiddleware, async (req, res) => {
         goodThing: goodThing || '',
         mistake: mistake || '',
         improvement: improvement || '',
-        gratitude: gratitude || ''
+        gratitude: gratitude || '',
+        mood: mood || null
       },
       create: {
         userId: req.userId,
@@ -160,7 +161,8 @@ router.post('/reflection', authMiddleware, async (req, res) => {
         goodThing: goodThing || '',
         mistake: mistake || '',
         improvement: improvement || '',
-        gratitude: gratitude || ''
+        gratitude: gratitude || '',
+        mood: mood || null
       }
     });
 

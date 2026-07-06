@@ -227,6 +227,33 @@ router.get('/', authMiddleware, async (req, res) => {
       });
     }
 
+    // --- Mood Trends Calculation ---
+    const recentReflections = await prisma.reflection.findMany({
+      where: { userId },
+      orderBy: { date: 'desc' },
+      take: 7
+    });
+
+    const moodCounts = {};
+    recentReflections.forEach(r => {
+      if (r.mood) {
+        moodCounts[r.mood] = (moodCounts[r.mood] || 0) + 1;
+      }
+    });
+
+    let dominantMood = 'No entries yet';
+    let maxCount = 0;
+    Object.keys(moodCounts).forEach(m => {
+      if (moodCounts[m] > maxCount) {
+        maxCount = moodCounts[m];
+        dominantMood = m;
+      }
+    });
+
+    const recentMoods = recentReflections
+      .filter(r => r.mood)
+      .map(r => ({ date: r.date, mood: r.mood }));
+
     res.json({
       bestStreak,
       currentStreak,
@@ -235,7 +262,9 @@ router.get('/', authMiddleware, async (req, res) => {
       totalPenalty,
       last7Days: last7DaysData,
       mostMissed,
-      achievements
+      achievements,
+      dominantMood,
+      recentMoods
     });
   } catch (error) {
     console.error('Insights calculation error:', error);

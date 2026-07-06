@@ -18,6 +18,7 @@ model User {
   mindLogs     MindCheckLog[]
   reflections  Reflection[]
   transactions WalletTransaction[]
+  selfies      DailySelfie[]
 }
 
 model Challenge {
@@ -34,6 +35,8 @@ model Challenge {
   isActive      Boolean        @default(true)
   createdAt     DateTime       @default(now())
   checkIns      DailyCheckIn[]
+  icon          String?        @default("🎯")
+  whyStarted    String?
 }
 
 model DailyCheckIn {
@@ -70,6 +73,7 @@ model Reflection {
   mistake     String
   improvement String
   gratitude   String
+  mood        String?
   createdAt   DateTime @default(now())
 
   @@unique([date, userId])
@@ -85,4 +89,15 @@ model WalletTransaction {
   category    String   // e.g. "Challenge Penalty", "Mind Check Trigger", "Charity Redirection"
   description String
   createdAt   DateTime @default(now())
+}
+
+model DailySelfie {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date      String   // Format: YYYY-MM-DD
+  imageBlob String   // Base64 compressed image string
+  createdAt DateTime @default(now())
+
+  @@unique([userId, date])
 }

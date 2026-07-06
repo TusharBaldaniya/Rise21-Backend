@@ -45,7 +45,8 @@ router.post('/register', async (req, res) => {
       user: {
         id: user.id,
         username: user.username,
-        name: user.name
+        name: user.name,
+        createdAt: user.createdAt
       }
     });
   } catch (error) {
@@ -86,7 +87,8 @@ router.post('/login', async (req, res) => {
       user: {
         id: user.id,
         username: user.username,
-        name: user.name
+        name: user.name,
+        createdAt: user.createdAt
       }
     });
   } catch (error) {
