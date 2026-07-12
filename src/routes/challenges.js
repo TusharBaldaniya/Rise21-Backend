@@ -133,10 +133,10 @@ router.delete('/:id', authMiddleware, async (req, res) => {
   }
 });
 
-// Update a challenge (e.g. edit title/details)
+// Update a challenge (e.g. edit title/details or extend duration)
 router.put('/:id', authMiddleware, async (req, res) => {
   try {
-    const { title, description, dailyTarget, penaltyAmount, icon, whyStarted } = req.body;
+    const { title, description, dailyTarget, penaltyAmount, icon, whyStarted, durationDays } = req.body;
     
     const challenge = await prisma.challenge.findFirst({
       where: {
@@ -149,6 +149,17 @@ router.put('/:id', authMiddleware, async (req, res) => {
       return res.status(404).json({ error: 'Challenge not found.' });
     }
 
+    let endDateUpdate = undefined;
+    if (durationDays !== undefined) {
+      const parsedDays = parseInt(durationDays, 10);
+      if (isNaN(parsedDays) || parsedDays <= 0) {
+        return res.status(400).json({ error: 'Duration days must be a positive integer.' });
+      }
+      const start = new Date(challenge.startDate);
+      start.setDate(start.getDate() + parsedDays);
+      endDateUpdate = start;
+    }
+
     const updated = await prisma.challenge.update({
       where: { id: challenge.id },
       data: {
@@ -157,7 +168,9 @@ router.put('/:id', authMiddleware, async (req, res) => {
         dailyTarget: dailyTarget !== undefined ? dailyTarget : challenge.dailyTarget,
         penaltyAmount: penaltyAmount !== undefined ? parseFloat(penaltyAmount) : challenge.penaltyAmount,
         icon: icon !== undefined ? icon : challenge.icon,
-        whyStarted: whyStarted !== undefined ? whyStarted : challenge.whyStarted
+        whyStarted: whyStarted !== undefined ? whyStarted : challenge.whyStarted,
+        durationDays: durationDays !== undefined ? parseInt(durationDays, 10) : challenge.durationDays,
+        endDate: endDateUpdate !== undefined ? endDateUpdate : challenge.endDate
       }
     });
 

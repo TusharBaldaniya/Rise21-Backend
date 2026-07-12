@@ -158,4 +158,78 @@ router.post('/', authMiddleware, async (req, res) => {
   }
 });
 
+// Get all checkins for a specific month (YYYY-MM)
+router.get('/monthly/:yearMonth', authMiddleware, async (req, res) => {
+  try {
+    const { yearMonth } = req.params; // e.g. "2026-07"
+    if (!/^\d{4}-\d{2}$/.test(yearMonth)) {
+      return res.status(400).json({ error: 'Invalid format. Use YYYY-MM.' });
+    }
+    const checkIns = await prisma.dailyCheckIn.findMany({
+      where: {
+        userId: req.userId,
+        date: {
+          startsWith: yearMonth
+        }
+      },
+      include: {
+        challenge: true
+      }
+    });
+    res.json(checkIns);
+  } catch (error) {
+    console.error('Fetch monthly checkins error:', error);
+    res.status(500).json({ error: 'Could not fetch checkins for month.' });
+  }
+});
+
+// Delete a daily checkin
+router.delete('/:challengeId/:date', authMiddleware, async (req, res) => {
+  try {
+    const { challengeId, date } = req.params;
+    
+    // Retrieve challenge to verify ownership
+    const challenge = await prisma.challenge.findFirst({
+      where: { id: challengeId, userId: req.userId }
+    });
+    
+    if (!challenge) {
+      return res.status(404).json({ error: 'Challenge not found.' });
+    }
+
+    // Find if exists
+    const existingCheckIn = await prisma.dailyCheckIn.findUnique({
+      where: {
+        challengeId_date: {
+          challengeId,
+          date
+        }
+      }
+    });
+
+    if (existingCheckIn) {
+      // Delete checkin
+      await prisma.dailyCheckIn.delete({
+        where: { id: existingCheckIn.id }
+      });
+
+      // Delete corresponding penalty transaction if any
+      await prisma.walletTransaction.deleteMany({
+        where: {
+          userId: req.userId,
+          date,
+          type: 'charge',
+          category: 'Challenge Penalty',
+          description: { startsWith: `Missed: ${challenge.title}` }
+        }
+      });
+    }
+
+    res.json({ message: 'Check-in deleted successfully.' });
+  } catch (error) {
+    console.error('Delete checkin error:', error);
+    res.status(500).json({ error: 'Could not delete checkin.' });
+  }
+});
+
 export default router;

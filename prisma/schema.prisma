@@ -101,3 +101,11 @@ model DailySelfie {
 
   @@unique([userId, date])
 }
+
+model Quote {
+  id        String   @id @default(uuid())
+  text      String
+  author    String
+  category  String?
+  createdAt DateTime @default(now())
+}

@@ -8,6 +8,7 @@ import journalRoutes from './routes/journal.js';
 import walletRoutes from './routes/wallet.js';
 import insightsRoutes from './routes/insights.js';
 import selfieRoutes from './routes/selfies.js';
+import prisma from './prisma.js';
 
 dotenv.config();
 
@@ -140,20 +141,38 @@ app.get('/api/health', (req, res) => {
 });
 
 // Daily Quote Endpoint
-app.get('/api/quote', (req, res) => {
-  const reqCategories = req.query.categories ? req.query.categories.split(',') : [];
-  let filtered = quotes;
-  if (reqCategories.length > 0) {
-    filtered = quotes.filter(q => q.category && reqCategories.includes(q.category));
+app.get('/api/quote', async (req, res) => {
+  try {
+    const dbQuotes = await prisma.quote.findMany();
+    if (dbQuotes.length === 0) {
+      const randomQuote = quotes[Math.floor(Math.random() * quotes.length)];
+      return res.json(randomQuote);
+    }
+    const randomQuote = dbQuotes[Math.floor(Math.random() * dbQuotes.length)];
+    res.json(randomQuote);
+  } catch (error) {
+    console.error('Fetch quote error:', error);
+    const randomQuote = quotes[Math.floor(Math.random() * quotes.length)];
+    res.json(randomQuote);
   }
-  if (filtered.length === 0) {
-    filtered = quotes;
-  }
-
-  const dayOfYear = Math.floor((new Date() - new Date(new Date().getFullYear(), 0, 0)) / 86400000);
-  const quote = filtered[dayOfYear % filtered.length];
-  res.json(quote);
 });
+
+// Seed quotes if database is empty
+async function seedQuotes() {
+  try {
+    const count = await prisma.quote.count();
+    if (count === 0) {
+      console.log('🌱 Seeding initial quotes to database...');
+      await prisma.quote.createMany({
+        data: quotes
+      });
+      console.log('✅ Seeding complete.');
+    }
+  } catch (error) {
+    console.error('Error seeding quotes:', error);
+  }
+}
+seedQuotes();
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
