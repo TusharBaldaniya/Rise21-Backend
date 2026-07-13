@@ -62,7 +62,7 @@ router.get('/', authMiddleware, async (req, res) => {
 
     sortedDates.forEach(dateStr => {
       const dayData = checkinsByDate[dateStr];
-      const isDaySuccessful = dayData.completed > 0 && dayData.missed === 0;
+      const isDaySuccessful = dayData.completed > 0;
 
       if (isDaySuccessful) {
         const currentDate = new Date(dateStr + 'T00:00:00');
@@ -98,10 +98,10 @@ router.get('/', authMiddleware, async (req, res) => {
     let checkDateStr = todayStr;
 
     // If today is a success or yesterday was a success, count backwards to find current streak
-    if (checkinsByDate[todayStr] && checkinsByDate[todayStr].completed > 0 && checkinsByDate[todayStr].missed === 0) {
+    if (checkinsByDate[todayStr] && checkinsByDate[todayStr].completed > 0) {
       streakActive = true;
       checkDateStr = todayStr;
-    } else if (checkinsByDate[yesterdayStr] && checkinsByDate[yesterdayStr].completed > 0 && checkinsByDate[yesterdayStr].missed === 0) {
+    } else if (checkinsByDate[yesterdayStr] && checkinsByDate[yesterdayStr].completed > 0) {
       streakActive = true;
       checkDateStr = yesterdayStr;
     }
@@ -112,7 +112,7 @@ router.get('/', authMiddleware, async (req, res) => {
       while (true) {
         const currStr = getLocalDateString(curr);
         const data = checkinsByDate[currStr];
-        if (data && data.completed > 0 && data.missed === 0) {
+        if (data && data.completed > 0) {
           streakCount++;
           curr.setDate(curr.getDate() - 1);
         } else {
