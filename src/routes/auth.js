@@ -127,7 +127,7 @@ router.get('/me', authMiddleware, async (req, res) => {
 // Restart User Session
 router.post('/restart', authMiddleware, async (req, res) => {
   try {
-    const { date } = req.body;
+    const { date, reason } = req.body;
     if (!date) {
       return res.status(400).json({ error: 'Restart date is required.' });
     }
@@ -142,13 +142,23 @@ router.post('/restart', authMiddleware, async (req, res) => {
 
     let restartsList = [];
     try {
-      restartsList = JSON.parse(user.restarts || '[]');
+      const parsed = JSON.parse(user.restarts || '[]');
+      restartsList = Array.isArray(parsed) ? parsed : [];
     } catch (e) {
       restartsList = [];
     }
 
-    if (!restartsList.includes(date)) {
-      restartsList.push(date);
+    // Normalize string elements to objects for backward compatibility
+    restartsList = restartsList.map(item => {
+      if (typeof item === 'string') {
+        return { date: item, reason: 'Manual Restart' };
+      }
+      return item;
+    });
+
+    const exists = restartsList.some(r => r.date === date);
+    if (!exists) {
+      restartsList.push({ date, reason: reason || 'Manual Restart' });
     }
 
     const updatedUser = await prisma.user.update({

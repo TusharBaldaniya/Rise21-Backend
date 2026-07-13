@@ -31,100 +31,127 @@ app.use((req, res, next) => {
 
 // Curated list of discipline, mindfulness, and self-improvement quotes
 const quotes = [
+  // Bhagavad Gita
   {
-    text: "उठो, जागो और तब तक मत रुको जब तक लक्ष्य प्राप्त न हो जाए।",
-    author: "Swami Vivekananda",
-    category: "spirituality"
-  },
-  {
-    text: "Take risks in your life. If you win, you can lead. If you lose, you can guide.",
-    author: "Swami Vivekananda",
+    text: "कर्मण्येवाधिकारस्ते मा फलेषु कदाचन। (પોતાના કર્તવ્ય કર્મ કરવા પર જ તારો અધિકાર છે, તેના ફળ પર ક્યારેય નહીં.)",
+    author: "Bhagavad Gita",
     category: "discipline"
   },
   {
-    text: "તમારી અંદર રહેલી શક્તિને ઓળખો, આત્મવિશ્વાસથી જીવન બદલી શકાય છે.",
-    author: "Swami Vivekananda",
-    category: "wisdom"
-  },
-  {
-    text: "ભક્તિ માત્ર મંદિરમાં નથી, જીવનના દરેક કાર્યને ભગવાન માટે કરવું એ સાચી ભક્તિ છે.",
-    author: "Pandurang Shastri Athavale",
-    category: "spirituality"
-  },
-  {
-    text: "The greatest discipline is to transform yourself before trying to transform society.",
-    author: "Pandurang Shastri Athavale",
+    text: "योगः कर्मसु कौशलम् — योग अर्थात् कर्मों में कुशलता ही सच्ची कुशलता है।",
+    author: "Bhagavad Gita",
     category: "discipline"
   },
   {
-    text: "जिंदगी तो अपने दम पर जी जाती है, दूसरों के कंधों पर तो जनाजे उठते हैं।",
-    author: "Bhagat Singh",
-    category: "discipline"
-  },
-  {
-    text: "Never bend your head. Always hold it high.",
-    author: "Chhatrapati Shivaji Maharaj",
-    category: "wisdom"
-  },
-  {
-    text: "योगः कर्मसु कौशलम् — Excellence comes through disciplined action.",
+    text: "उद्धरेदात्मनात्मानं नात्मानमवसादयेत्। आत्मैव ह्यात्मनो बन्धुरात्मैव रिपुरात्मनः॥ (મનુષ્યે પોતાના દ્વારા પોતાનો ઉદ્ધાર કરવો જોઈએ.)",
     author: "Bhagavad Gita",
     category: "spirituality"
   },
   {
-    text: "You do not rise to the level of your goals, you fall to the level of your systems.",
-    author: "James Clear",
-    category: "discipline"
-  },
-  {
-    text: "Discipline is choosing between what you want now and what you want most.",
-    author: "Abraham Lincoln",
-    category: "discipline"
-  },
-  {
-    text: "We are what we repeatedly do. Excellence, then, is not an act, but a habit.",
-    author: "Aristotle",
-    category: "discipline"
-  },
-  {
-    text: "The man who moves a mountain begins by carrying away small stones.",
-    author: "Confucius",
+    text: "ध्यायतो विषयान्पुंसः सङ्गस्तेषूपजायते। सङ्गात्संजायते कामः कामात्क्रोधोऽभिजायते॥",
+    author: "Bhagavad Gita",
     category: "wisdom"
   },
   {
-    text: "Rule your mind or it will rule you.",
-    author: "Horace",
+    text: "सुखदुःखे समे कृत्वा लाभालाभौ जयाजयौ। (सुख-दुःख, लाभ-हानि और जय-पराजय को समान मानकर युद्ध करो।)",
+    author: "Bhagavad Gita",
+    category: "wisdom"
+  },
+  // Pandurang Shastri Athavale
+  {
+    text: "ભક્તિ એ માત્ર પૂજા-પાઠ નથી, પરંતુ જીવનના પ્રત્યેક સત્કાર્યને ઇશ્વરીય કાર્ય ગણવું તે સાચી ભક્તિ છે.",
+    author: "Pandurang Shastri Athavale",
+    category: "spirituality"
+  },
+  {
+    text: "સમાજ પરિવર્તન પહેલાં સ્વયં પરિવર્તન જરૂરી છે, તે જ સાચી શિસ્ત અને તપસ્યા છે.",
+    author: "Pandurang Shastri Athavale",
+    category: "discipline"
+  },
+  {
+    text: "કૃતજ્ઞતા એ માનવ સંસ્કૃતિનો પ્રાણ છે. ઇશ્વર પ્રત્યે સદાય કૃતજ્ઞ બનો.",
+    author: "Pandurang Shastri Athavale",
     category: "wisdom"
   },
   {
-    text: "Do not save what is left after spending, but spend what is left after saving.",
-    author: "Warren Buffett",
-    category: "wealth"
+    text: "જે વ્યક્તિ પોતાના વિચારો અને વાણી પર કાબુ મેળવી શકે છે તે જ સાચો સ્વાધ્યાયી છે.",
+    author: "Pandurang Shastri Athavale",
+    category: "wisdom"
+  },
+  // Bhagat Singh
+  {
+    text: "जिंदगी तो अपने दम पर जी जाती है, दूसरों के कंधों पर तो सिर्फ जनाजे उठाए जाते हैं।",
+    author: "Bhagat Singh",
+    category: "discipline"
   },
   {
-    text: "Wealth consists not in having great possessions, but in having few wants.",
-    author: "Epictetus",
-    category: "wealth"
+    text: "राख का हर एक कण मेरी गर्मी से गतिमान है, मैं एक ऐसा पागल हूँ जो जेल में भी आज़ाद है।",
+    author: "Bhagat Singh",
+    category: "wisdom"
   },
   {
-    text: "A penny saved is a penny earned.",
-    author: "Benjamin Franklin",
-    category: "wealth"
+    text: "लिख रहा हूँ मैं अंजाम जिसका कल आगाज आयेगा, मेरे लहू का हर एक कतरा इंकलाब लायेगा।",
+    author: "Bhagat Singh",
+    category: "wisdom"
+  },
+  // Swami Vivekananda
+  {
+    text: "उठो, जागो और तब तक मत रुको जब तक लक्ष्य प्राप्त न हो जाए।",
+    author: "Swami Vivekananda",
+    category: "discipline"
   },
   {
-    text: "Reading is to the mind what exercise is to the body.",
-    author: "Joseph Addison",
-    category: "fitness"
+    text: "एक समय में एक काम करो, और ऐसा करते समय अपनी पूरी आत्मा उसमें डाल दो और बाकी सब कुछ भूल जाओ।",
+    author: "Swami Vivekananda",
+    category: "discipline"
   },
   {
-    text: "The body achieves what the mind believes.",
-    author: "Unknown",
-    category: "fitness"
+    text: "તમારી અંદર રહેલી દૈવી શક્તિને ઓળખો, આત્મવિશ્વાસથી જ મહાન જીવન ઘડી શકાય છે.",
+    author: "Swami Vivekananda",
+    category: "wisdom"
   },
   {
-    text: "Physical fitness is not only one of the most important keys to a healthy body, it is the basis of dynamic and creative intellectual activity.",
-    author: "John F. Kennedy",
-    category: "fitness"
+    text: "જેવો તમારો વિચાર હશે, તેવું જ તમારું જીવન બનશે. હંમેશા ઉચ્ચ અને ઉદાત્ત વિચારો જ સેવો.",
+    author: "Swami Vivekananda",
+    category: "wisdom"
+  },
+  {
+    text: "खुद को कमजोर समझना सबसे बड़ा पाप है। अपने आप पर अटूट विश्वास रखो।",
+    author: "Swami Vivekananda",
+    category: "spirituality"
+  },
+  // Chhatrapati Shivaji Maharaj
+  {
+    text: "જ્યારે ધ્યેય પર્વત જેવડું ઊંચું હોય, ત્યારે ધીરજ અને પુરુષાર્થ પણ અસાધારણ હોવા જોઈએ.",
+    author: "Chhatrapati Shivaji Maharaj",
+    category: "discipline"
+  },
+  {
+    text: "स्वतंत्रता एक वरदान है, जिसे केवल पुरुषार्थ और पराक्रम से ही सुरक्षित रखा जा सकता है।",
+    author: "Chhatrapati Shivaji Maharaj",
+    category: "wisdom"
+  },
+  // Netaji Subhas Chandra Bose
+  {
+    text: "યાદ રાખો, સૌથી મોટો ગુનો અન્યાય અને ખોટી બાબત સાથે સમાધાન કરવું છે.",
+    author: "Netaji Subhas Chandra Bose",
+    category: "discipline"
+  },
+  {
+    text: "सफलता हमेशा बलिदान मांगती है, बिना संघर्ष के कोई महान कार्य सिद्ध नहीं होता।",
+    author: "Netaji Subhas Chandra Bose",
+    category: "wisdom"
+  },
+  // Chanakya
+  {
+    text: "मनसि एकं वचसि एकं कर्मणि एकं महात्मनाम्। (મહાત્માઓનું મન, વાણી અને કર્મ હંમેશાં એક સમાન હોય છે.)",
+    author: "Chanakya",
+    category: "discipline"
+  },
+  {
+    text: "आलस्यं हि मनुष्याणां शरीरस्थो महान् रिपुः। (આળસ એ મનુષ્યના શરીરનો સૌથી મોટો શત્રુ છે.)",
+    author: "Chanakya",
+    category: "discipline"
   }
 ];
 

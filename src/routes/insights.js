@@ -12,6 +12,16 @@ function getLocalDateString(date) {
   return `${year}-${month}-${day}`;
 }
 
+function getNextDayDateString(dateStr) {
+  const parts = dateStr.split('-');
+  const date = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+  date.setDate(date.getDate() + 1);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 router.get('/', authMiddleware, async (req, res) => {
   try {
     const userId = req.userId;
@@ -24,12 +34,24 @@ router.get('/', authMiddleware, async (req, res) => {
 
     let restartsList = [];
     try {
-      restartsList = JSON.parse(user?.restarts || '[]');
+      const parsed = JSON.parse(user?.restarts || '[]');
+      restartsList = Array.isArray(parsed) ? parsed : [];
     } catch (e) {
       restartsList = [];
     }
 
-    const lastRestartDateStr = restartsList.length > 0 ? restartsList[restartsList.length - 1] : null;
+    // Normalize restarts for backward compatibility
+    restartsList = restartsList.map(item => {
+      if (typeof item === 'string') {
+        return { date: item, reason: 'Manual Restart' };
+      }
+      return item;
+    });
+
+    const lastRestartObj = restartsList.length > 0 ? restartsList[restartsList.length - 1] : null;
+    const activeSessionStartDateStr = lastRestartObj 
+      ? getNextDayDateString(lastRestartObj.date)
+      : null;
 
     // 1. Fetch active challenges count
     const activeChallengesCount = await prisma.challenge.count({
@@ -43,24 +65,37 @@ router.get('/', authMiddleware, async (req, res) => {
       orderBy: { date: 'asc' }
     });
 
-    const activeSessionCheckIns = lastRestartDateStr 
-      ? allCheckIns.filter(c => c.date >= lastRestartDateStr)
+    const activeSessionCheckIns = activeSessionStartDateStr 
+      ? allCheckIns.filter(c => c.date >= activeSessionStartDateStr)
       : allCheckIns;
 
     // 3. Fetch all wallet transactions for total penalty sum
     const transactions = await prisma.walletTransaction.findMany({
       where: { userId, type: 'charge' }
     });
-    const activeTransactions = lastRestartDateStr
+    const activeTransactions = activeSessionStartDateStr
       ? transactions.filter(t => {
           const txDate = t.date || (t.createdAt && new Date(t.createdAt).toISOString().split('T')[0]);
-          return txDate && txDate >= lastRestartDateStr;
+          return txDate && txDate >= activeSessionStartDateStr;
         })
       : transactions;
     const totalPenalty = activeTransactions.reduce((sum, t) => sum + t.amount, 0);
 
     // --- Streak & Success Calculations ---
-    // Group check-ins by date
+    // Group all check-ins for calendar weekly discipline preservation
+    const allCheckinsByDate = {};
+    allCheckIns.forEach(c => {
+      if (!allCheckinsByDate[c.date]) {
+        allCheckinsByDate[c.date] = { completed: 0, missed: 0 };
+      }
+      if (c.status === 'completed') {
+        allCheckinsByDate[c.date].completed++;
+      } else {
+        allCheckinsByDate[c.date].missed++;
+      }
+    });
+
+    // Group active session check-ins by date for streaks
     const checkinsByDate = {};
     activeSessionCheckIns.forEach(c => {
       if (!checkinsByDate[c.date]) {
@@ -162,7 +197,7 @@ router.get('/', authMiddleware, async (req, res) => {
       d.setDate(d.getDate() - i);
       const dateStr = getLocalDateString(d);
       const dayName = weekdays[d.getDay()];
-      const stats = checkinsByDate[dateStr] || { completed: 0, missed: 0 };
+      const stats = allCheckinsByDate[dateStr] || { completed: 0, missed: 0 };
       
       let rate = 0;
       const total = stats.completed + stats.missed;
@@ -223,7 +258,7 @@ router.get('/', authMiddleware, async (req, res) => {
     });
 
     const has21DayCompleted = challenges.some(ch => {
-      const activeCheckins = ch.checkIns.filter(ci => !lastRestartDateStr || ci.date >= lastRestartDateStr);
+      const activeCheckins = ch.checkIns.filter(ci => !activeSessionStartDateStr || ci.date >= activeSessionStartDateStr);
       const completedCount = activeCheckins.filter(ci => ci.status === 'completed').length;
       return ch.durationDays >= 21 && completedCount >= 21;
     });
@@ -239,7 +274,7 @@ router.get('/', authMiddleware, async (req, res) => {
 
     // Discipline Master (streak of 14 days or completed challenge with 100% success rate and at least 7 checkins)
     const hasPerfectChallenge = challenges.some(ch => {
-      const activeCheckins = ch.checkIns.filter(ci => !lastRestartDateStr || ci.date >= lastRestartDateStr);
+      const activeCheckins = ch.checkIns.filter(ci => !activeSessionStartDateStr || ci.date >= activeSessionStartDateStr);
       const totalCount = activeCheckins.length;
       const completedCount = activeCheckins.filter(ci => ci.status === 'completed').length;
       return totalCount >= 7 && completedCount === totalCount;
