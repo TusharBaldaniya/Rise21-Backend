@@ -46,7 +46,8 @@ router.post('/register', async (req, res) => {
         id: user.id,
         username: user.username,
         name: user.name,
-        createdAt: user.createdAt
+        createdAt: user.createdAt,
+        restarts: user.restarts
       }
     });
   } catch (error) {
@@ -88,7 +89,8 @@ router.post('/login', async (req, res) => {
         id: user.id,
         username: user.username,
         name: user.name,
-        createdAt: user.createdAt
+        createdAt: user.createdAt,
+        restarts: user.restarts
       }
     });
   } catch (error) {
@@ -106,7 +108,8 @@ router.get('/me', authMiddleware, async (req, res) => {
         id: true,
         username: true,
         name: true,
-        createdAt: true
+        createdAt: true,
+        restarts: true
       }
     });
 
@@ -118,6 +121,54 @@ router.get('/me', authMiddleware, async (req, res) => {
   } catch (error) {
     console.error('Profile fetch error:', error);
     res.status(500).json({ error: 'Could not fetch user profile.' });
+  }
+});
+
+// Restart User Session
+router.post('/restart', authMiddleware, async (req, res) => {
+  try {
+    const { date } = req.body;
+    if (!date) {
+      return res.status(400).json({ error: 'Restart date is required.' });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: req.userId }
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    let restartsList = [];
+    try {
+      restartsList = JSON.parse(user.restarts || '[]');
+    } catch (e) {
+      restartsList = [];
+    }
+
+    if (!restartsList.includes(date)) {
+      restartsList.push(date);
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: req.userId },
+      data: {
+        restarts: JSON.stringify(restartsList)
+      },
+      select: {
+        id: true,
+        username: true,
+        name: true,
+        createdAt: true,
+        restarts: true
+      }
+    });
+
+    res.json(updatedUser);
+  } catch (error) {
+    console.error('Restart session error:', error);
+    res.status(500).json({ error: 'Could not restart session.' });
   }
 });
 

@@ -16,6 +16,21 @@ router.get('/', authMiddleware, async (req, res) => {
   try {
     const userId = req.userId;
 
+    // Fetch user restarts
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { restarts: true }
+    });
+
+    let restartsList = [];
+    try {
+      restartsList = JSON.parse(user?.restarts || '[]');
+    } catch (e) {
+      restartsList = [];
+    }
+
+    const lastRestartDateStr = restartsList.length > 0 ? restartsList[restartsList.length - 1] : null;
+
     // 1. Fetch active challenges count
     const activeChallengesCount = await prisma.challenge.count({
       where: { userId, isActive: true }
@@ -28,16 +43,26 @@ router.get('/', authMiddleware, async (req, res) => {
       orderBy: { date: 'asc' }
     });
 
+    const activeSessionCheckIns = lastRestartDateStr 
+      ? allCheckIns.filter(c => c.date >= lastRestartDateStr)
+      : allCheckIns;
+
     // 3. Fetch all wallet transactions for total penalty sum
     const transactions = await prisma.walletTransaction.findMany({
       where: { userId, type: 'charge' }
     });
-    const totalPenalty = transactions.reduce((sum, t) => sum + t.amount, 0);
+    const activeTransactions = lastRestartDateStr
+      ? transactions.filter(t => {
+          const txDate = t.date || (t.createdAt && new Date(t.createdAt).toISOString().split('T')[0]);
+          return txDate && txDate >= lastRestartDateStr;
+        })
+      : transactions;
+    const totalPenalty = activeTransactions.reduce((sum, t) => sum + t.amount, 0);
 
     // --- Streak & Success Calculations ---
     // Group check-ins by date
     const checkinsByDate = {};
-    allCheckIns.forEach(c => {
+    activeSessionCheckIns.forEach(c => {
       if (!checkinsByDate[c.date]) {
         checkinsByDate[c.date] = { completed: 0, missed: 0 };
       }
@@ -125,8 +150,8 @@ router.get('/', authMiddleware, async (req, res) => {
     }
 
     // Success Rate
-    const totalCheckinsCount = allCheckIns.length;
-    const completedCheckinsCount = allCheckIns.filter(c => c.status === 'completed').length;
+    const totalCheckinsCount = activeSessionCheckIns.length;
+    const completedCheckinsCount = activeSessionCheckIns.filter(c => c.status === 'completed').length;
     const successRate = totalCheckinsCount > 0 ? Math.round((completedCheckinsCount / totalCheckinsCount) * 100) : 0;
 
     // --- Last 7 Days chart data ---
@@ -198,7 +223,8 @@ router.get('/', authMiddleware, async (req, res) => {
     });
 
     const has21DayCompleted = challenges.some(ch => {
-      const completedCount = ch.checkIns.filter(ci => ci.status === 'completed').length;
+      const activeCheckins = ch.checkIns.filter(ci => !lastRestartDateStr || ci.date >= lastRestartDateStr);
+      const completedCount = activeCheckins.filter(ci => ci.status === 'completed').length;
       return ch.durationDays >= 21 && completedCount >= 21;
     });
 
@@ -213,8 +239,9 @@ router.get('/', authMiddleware, async (req, res) => {
 
     // Discipline Master (streak of 14 days or completed challenge with 100% success rate and at least 7 checkins)
     const hasPerfectChallenge = challenges.some(ch => {
-      const totalCount = ch.checkIns.length;
-      const completedCount = ch.checkIns.filter(ci => ci.status === 'completed').length;
+      const activeCheckins = ch.checkIns.filter(ci => !lastRestartDateStr || ci.date >= lastRestartDateStr);
+      const totalCount = activeCheckins.length;
+      const completedCount = activeCheckins.filter(ci => ci.status === 'completed').length;
       return totalCount >= 7 && completedCount === totalCount;
     });
 
