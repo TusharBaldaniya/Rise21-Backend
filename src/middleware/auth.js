@@ -1,6 +1,6 @@
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'sadhna_super_secret_habit_tracker_key';
+const JWT_SECRET = process.env.JWT_SECRET || 'rise21_super_secret_habit_tracker_key';
 
 export default function authMiddleware(req, res, next) {
   const authHeader = req.headers.authorization;

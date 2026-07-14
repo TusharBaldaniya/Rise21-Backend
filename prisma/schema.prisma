@@ -12,6 +12,7 @@ model User {
   username     String              @unique
   passwordHash String
   name         String
+  role         String              @default("user") // "user" or "admin"
   createdAt    DateTime            @default(now())
   restarts     String              @default("[]")
   challenges   Challenge[]
@@ -108,5 +109,12 @@ model Quote {
   text      String
   author    String
   category  String?
+  createdAt DateTime @default(now())
+}
+
+model Announcement {
+  id        String   @id @default(uuid())
+  title     String
+  message   String
   createdAt DateTime @default(now())
 }

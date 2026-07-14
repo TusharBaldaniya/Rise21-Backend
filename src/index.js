@@ -8,6 +8,8 @@ import journalRoutes from './routes/journal.js';
 import walletRoutes from './routes/wallet.js';
 import insightsRoutes from './routes/insights.js';
 import selfieRoutes from './routes/selfies.js';
+import adminRoutes from './routes/admin.js';
+import announcementRoutes from './routes/announcements.js';
 import prisma from './prisma.js';
 
 dotenv.config();
@@ -31,6 +33,209 @@ app.use((req, res, next) => {
 
 // Curated list of discipline, mindfulness, and self-improvement quotes
 const quotes = [
+  // Bhagavad Gita
+  {
+    text: "न हि कल्याणकृत्कश्चिद् दुर्गतिं तात गच्छति। (જે સદ્કર્મ કરે છે તેનું ક્યારેય અનિષ્ટ થતું નથી.)",
+    author: "Bhagavad Gita",
+    category: "spirituality"
+  },
+  {
+    text: "श्रद्धावान् लभते ज्ञानम्। (શ્રદ્ધાવાન વ્યક્તિને જ સાચું જ્ઞાન પ્રાપ્ત થાય છે.)",
+    author: "Bhagavad Gita",
+    category: "wisdom"
+  },
+  {
+    text: "तस्मादुत्तिष्ठ कौन्तेय युद्धाय कृतनिश्चयः। (ઉઠો, દૃઢ નિશ્ચય સાથે તમારા કર્તવ્યમાં લાગી જાઓ.)",
+    author: "Bhagavad Gita",
+    category: "discipline"
+  },
+
+  // Swami Vivekananda
+  {
+    text: "जिस दिन आपके सामने कोई समस्या न आए, समझ लीजिए कि आप गलत रास्ते पर चल रहे हैं।",
+    author: "Swami Vivekananda",
+    category: "discipline"
+  },
+  {
+    text: "શક્તિ જ જીવન છે, નિર્બળતા જ મૃત્યુ છે.",
+    author: "Swami Vivekananda",
+    category: "discipline"
+  },
+  {
+    text: "બળવાન બનો. સમગ્ર સત્યનું રહસ્ય એ જ છે.",
+    author: "Swami Vivekananda",
+    category: "wisdom"
+  },
+
+  // Chanakya
+  {
+    text: "उद्योगिनं पुरुषसिंहमुपैति लक्ष्मीः। (મહેનતુ અને સાહસિક માણસ પાસે જ સમૃદ્ધિ આવે છે.)",
+    author: "Chanakya",
+    category: "discipline"
+  },
+  {
+    text: "कालः सर्वभक्षी। (સમય સૌથી શક્તિશાળી છે; તેનો સદુપયોગ કરો.)",
+    author: "Chanakya",
+    category: "wisdom"
+  },
+  {
+    text: "જે પોતાને જીતી શકે છે તે આખી દુનિયાને જીતી શકે છે.",
+    author: "Chanakya",
+    category: "discipline"
+  },
+
+  // Pandurang Shastri Athavale
+  {
+    text: "દરેક દિવસ ભગવાને આપેલી નવી તક છે, તેને વ્યર્થ ન જવા દો.",
+    author: "Pandurang Shastri Athavale",
+    category: "spirituality"
+  },
+  {
+    text: "સ્વાધ્યાય એટલે રોજ થોડું સારું બનવાનો સંકલ્પ.",
+    author: "Pandurang Shastri Athavale",
+    category: "discipline"
+  },
+  {
+    text: "જે પોતાને જીતે છે તે જ સાચો વિજેતા છે.",
+    author: "Pandurang Shastri Athavale",
+    category: "wisdom"
+  },
+
+  // Chhatrapati Shivaji Maharaj
+  {
+    text: "સાહસ અને ધીરજથી અશક્ય પણ શક્ય બની જાય છે.",
+    author: "Chhatrapati Shivaji Maharaj",
+    category: "discipline"
+  },
+  {
+    text: "જે પોતાના ધર્મ અને કર્તવ્યનું રક્ષણ કરે છે, ભગવાન પણ તેનું રક્ષણ કરે છે.",
+    author: "Chhatrapati Shivaji Maharaj",
+    category: "spirituality"
+  },
+
+  // Netaji Subhas Chandra Bose
+  {
+    text: "संघर्ष ही जीवन का दूसरा नाम है।",
+    author: "Netaji Subhas Chandra Bose",
+    category: "discipline"
+  },
+  {
+    text: "ક્યારેય હાર ન માનો, કારણ કે જીત ઘણી વખત છેલ્લી કોશિશ પછી મળે છે.",
+    author: "Netaji Subhas Chandra Bose",
+    category: "wisdom"
+  },
+
+  // Bhagat Singh
+  {
+    text: "जो व्यक्ति आगे बढ़ना चाहता है, उसे कठिनाइयों से मित्रता करनी होगी।",
+    author: "Bhagat Singh",
+    category: "discipline"
+  },
+  {
+    text: "હિંમત એ જ માણસની સાચી ઓળખ છે.",
+    author: "Bhagat Singh",
+    category: "wisdom"
+  },
+
+  // Maharana Pratap
+  {
+    text: "સ્વાભિમાન માટે જીવવું એ જ સાચું જીવન છે.",
+    author: "Maharana Pratap",
+    category: "discipline"
+  },
+  {
+    text: "परिस्थितियाँ चाहे जैसी हों, वीर कभी हार नहीं मानता।",
+    author: "Maharana Pratap",
+    category: "wisdom"
+  },
+
+  // APJ Abdul Kalam
+  {
+    text: "सपने वो नहीं जो आप सोते समय देखते हैं, सपने वो हैं जो आपको सोने नहीं देते।",
+    author: "A.P.J. Abdul Kalam",
+    category: "discipline"
+  },
+  {
+    text: "જો તમે સૂર્યની જેમ ચમકવા માંગો છો, તો પહેલા સૂર્યની જેમ તપવું પડશે.",
+    author: "A.P.J. Abdul Kalam",
+    category: "discipline"
+  },
+
+  // Sardar Vallabhbhai Patel
+  {
+    text: "શક્તિ વગર શ્રદ્ધા વ્યર્થ છે, અને શ્રદ્ધા વગર શક્તિ અપૂર્ણ છે.",
+    author: "Sardar Vallabhbhai Patel",
+    category: "wisdom"
+  },
+  {
+    text: "એકતા અને શિસ્તથી અશક્ય કાર્ય પણ શક્ય બને છે.",
+    author: "Sardar Vallabhbhai Patel",
+    category: "discipline"
+  },
+
+  // Sanskrit Subhashitas
+  {
+    text: "चरैवेति चरैवेति। (ચાલતા રહો, સતત આગળ વધતા રહો.)",
+    author: "Sanskrit Subhashita",
+    category: "discipline"
+  },
+  {
+    text: "विद्या ददाति विनयं, विनयाद् याति पात्रताम्। (જ્ઞાન વિનય આપે છે, વિનયથી પાત્રતા મળે છે.)",
+    author: "Sanskrit Subhashita",
+    category: "wisdom"
+  },
+  {
+    text: "उद्यमेन हि सिद्ध्यन्ति कार्याणि न मनोरथैः। (કાર્યો મહેનતથી પૂર્ણ થાય છે, માત્ર ઇચ્છાઓથી નહીં.)",
+    author: "Sanskrit Subhashita",
+    category: "discipline"
+  },
+  {
+    text: "सत्यं वद, धर्मं चर। (સત્ય બોલો અને ધર્મનું આચરણ કરો.)",
+    author: "Upanishads",
+    category: "spirituality"
+  },
+
+  // Morning Motivation
+  {
+    text: "આજનો સૂર્ય તમારા માટે નવી શરૂઆત લઈને આવ્યો છે. ઊઠો અને તમારા શ્રેષ્ઠ સ્વરૂપને જીવો.",
+    author: "Rise21",
+    category: "discipline"
+  },
+  {
+    text: "દરરોજ ૧% સુધારો, ૨૧ દિવસ પછી તમે નવા માણસ બની જશો.",
+    author: "Rise21",
+    category: "discipline"
+  },
+  {
+    text: "તમારી સવાર જીતો, તમારો આખો દિવસ જીતી જશો.",
+    author: "Rise21",
+    category: "discipline"
+  },
+  {
+    text: "આળસ થોડા સમયનો આરામ આપે છે, શિસ્ત આખું જીવન ગૌરવ આપે છે.",
+    author: "Rise21",
+    category: "discipline"
+  },
+  {
+    text: "પ્રાર્થના મનને શુદ્ધ કરે છે, ધ્યાન મનને સ્થિર કરે છે અને શિસ્ત જીવનને મહાન બનાવે છે.",
+    author: "Rise21",
+    category: "spirituality"
+  },
+  {
+    text: "જે દિવસે તમે બહાનાં છોડશો, એ દિવસે સફળતા તમારી તરફ દોડશે.",
+    author: "Rise21",
+    category: "discipline"
+  },
+  {
+    text: "આજે જે કરશો તે જ આવતીકાલનું ભાગ્ય બનાવશે.",
+    author: "Rise21",
+    category: "wisdom"
+  },
+  {
+    text: "વહેલા ઉઠવું માત્ર આદત નથી, તે જીવન બદલવાની શરૂઆત છે.",
+    author: "Rise21",
+    category: "discipline"
+  },
   // Bhagavad Gita
   {
     text: "कर्मण्येवाधिकारस्ते मा फलेषु कदाचन। (પોતાના કર્તવ્ય કર્મ કરવા પર જ તારો અધિકાર છે, તેના ફળ પર ક્યારેય નહીં.)",
@@ -163,6 +368,8 @@ app.use('/api/journal', journalRoutes);
 app.use('/api/wallet', walletRoutes);
 app.use('/api/insights', insightsRoutes);
 app.use('/api/selfies', selfieRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/announcements', announcementRoutes);
 app.get('/api/health', (req, res) => {
   res.send('OK');
 });
@@ -188,6 +395,7 @@ app.get('/api/quote', async (req, res) => {
 async function seedQuotes() {
   try {
     const count = await prisma.quote.count();
+    // await prisma.quote.deleteMany();
     if (count === 0) {
       console.log('🌱 Seeding initial quotes to database...');
       await prisma.quote.createMany({
@@ -199,7 +407,7 @@ async function seedQuotes() {
     console.error('Error seeding quotes:', error);
   }
 }
-seedQuotes();
+// seedQuotes();
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

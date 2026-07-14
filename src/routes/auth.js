@@ -5,7 +5,7 @@ import prisma from '../prisma.js';
 import authMiddleware from '../middleware/auth.js';
 
 const router = express.Router();
-const JWT_SECRET = process.env.JWT_SECRET || 'sadhna_super_secret_habit_tracker_key';
+const JWT_SECRET = process.env.JWT_SECRET || 'rise21_super_secret_habit_tracker_key';
 
 // Register User
 router.post('/register', async (req, res) => {
@@ -33,7 +33,8 @@ router.post('/register', async (req, res) => {
       data: {
         username,
         passwordHash,
-        name
+        name,
+        role: 'user'
       }
     });
 
@@ -46,6 +47,7 @@ router.post('/register', async (req, res) => {
         id: user.id,
         username: user.username,
         name: user.name,
+        role: user.role,
         createdAt: user.createdAt,
         restarts: user.restarts
       }
@@ -89,6 +91,7 @@ router.post('/login', async (req, res) => {
         id: user.id,
         username: user.username,
         name: user.name,
+        role: user.role,
         createdAt: user.createdAt,
         restarts: user.restarts
       }
@@ -108,6 +111,7 @@ router.get('/me', authMiddleware, async (req, res) => {
         id: true,
         username: true,
         name: true,
+        role: true,
         createdAt: true,
         restarts: true
       }
