@@ -26,9 +26,6 @@ webpush.setVapidDetails(
   vapidPrivateKey
 );
 
-// In-memory Web Push Subscriptions Store
-const pushSubscriptions = new Map();
-
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -424,81 +421,139 @@ async function seedQuotes() {
 }
 // seedQuotes();
 
+import fs from 'fs';
+import path from 'path';
+
+// Persistent Disk Storage for Web Push Subscriptions
+const SUBSCRIPTION_FILE = path.join(process.cwd(), 'push_subscriptions.json');
+
+const loadSubscriptions = () => {
+  try {
+    if (fs.existsSync(SUBSCRIPTION_FILE)) {
+      const data = fs.readFileSync(SUBSCRIPTION_FILE, 'utf8');
+      const list = JSON.parse(data);
+      const map = new Map();
+      list.forEach(item => {
+        if (item && item.subscription && item.subscription.endpoint) {
+          map.set(item.subscription.endpoint, item);
+        }
+      });
+      console.log(`📦 Loaded ${map.size} Web Push Subscriptions from disk.`);
+      return map;
+    }
+  } catch (e) {
+    console.error('Error loading push subscriptions from disk:', e);
+  }
+  return new Map();
+};
+
+const saveSubscriptions = (map) => {
+  try {
+    const list = Array.from(map.values());
+    fs.writeFileSync(SUBSCRIPTION_FILE, JSON.stringify(list, null, 2), 'utf8');
+  } catch (e) {
+    console.error('Error saving push subscriptions to disk:', e);
+  }
+};
+
+const pushSubscriptions = loadSubscriptions();
+
 // Web Push Notification Endpoints
 app.get('/api/notifications/vapid-public-key', (req, res) => {
   res.json({ publicKey: vapidPublicKey });
 });
 
 app.post('/api/notifications/subscribe', (req, res) => {
-  const { subscription, userId } = req.body;
+  const { subscription, userId, reminderTime } = req.body;
   if (!subscription || !subscription.endpoint) {
     return res.status(400).json({ error: 'Invalid subscription object' });
   }
 
   const key = subscription.endpoint;
-  pushSubscriptions.set(key, { subscription, userId: userId || 'anonymous', timestamp: Date.now() });
-  console.log(`📡 Registered Web Push Subscription: ${key.substring(0, 30)}...`);
+  pushSubscriptions.set(key, {
+    subscription,
+    userId: userId || 'anonymous',
+    reminderTime: reminderTime || '20:00',
+    timestamp: Date.now()
+  });
+  saveSubscriptions(pushSubscriptions);
+  console.log(`📡 Registered Web Push Subscription for user ${userId || 'anon'} [Time: ${reminderTime || '20:00'}]`);
 
   res.status(201).json({ status: 'subscribed' });
 });
 
-app.post('/api/notifications/test-push', async (req, res) => {
-  const { userId } = req.body;
-  let sentCount = 0;
+export const broadcastPushNotification = async (title, body) => {
+  if (pushSubscriptions.size === 0) {
+    console.log('📡 No active push subscriptions to broadcast to.');
+    return 0;
+  }
 
-  const randomQuote = quotes[Math.floor(Math.random() * quotes.length)];
-  const payload = JSON.stringify({
-    title: 'Daily Motivation 🎯',
-    body: randomQuote.author ? `"${randomQuote.text}" — ${randomQuote.author}` : `"${randomQuote.text}"`
-  });
+  const payload = JSON.stringify({ title, body });
+  let sentCount = 0;
+  console.log(`📢 Broadcasting Web Push notification: "${title}" to ${pushSubscriptions.size} devices`);
 
   for (const [key, item] of pushSubscriptions.entries()) {
     try {
       await webpush.sendNotification(item.subscription, payload);
       sentCount++;
     } catch (err) {
-      console.error('Error sending test push:', err.statusCode);
-      if (err.statusCode === 410 || err.statusCode === 404) {
-        pushSubscriptions.delete(key);
-      }
-    }
-  }
-
-  res.json({ status: 'ok', sent: sentCount });
-});
-
-// Server-side Background Push Scheduler (Runs every minute to check 07:00 AM and 09:30 PM)
-const sendScheduledPush = async (title) => {
-  if (pushSubscriptions.size === 0) return;
-
-  const randomQuote = quotes[Math.floor(Math.random() * quotes.length)];
-  const payload = JSON.stringify({
-    title,
-    body: randomQuote.author ? `"${randomQuote.text}" — ${randomQuote.author}` : `"${randomQuote.text}"`
-  });
-
-  console.log(`⏰ Sending scheduled Web Push notifications: "${title}" to ${pushSubscriptions.size} devices`);
-
-  for (const [key, item] of pushSubscriptions.entries()) {
-    try {
-      await webpush.sendNotification(item.subscription, payload);
-    } catch (err) {
       console.error('Error sending Web Push notification:', err.statusCode);
       if (err.statusCode === 410 || err.statusCode === 404) {
         pushSubscriptions.delete(key);
+        saveSubscriptions(pushSubscriptions);
       }
     }
   }
+  return sentCount;
 };
 
-// 1. Morning Push (07:00 AM)
-cron.schedule('0 7 * * *', () => {
-  sendScheduledPush('Morning Motivation ☀️');
+app.post('/api/notifications/test-push', async (req, res) => {
+  const randomQuote = quotes[Math.floor(Math.random() * quotes.length)];
+  const quoteText = randomQuote.author ? `"${randomQuote.text}" — ${randomQuote.author}` : `"${randomQuote.text}"`;
+  const sentCount = await broadcastPushNotification('Daily Motivation 🎯', quoteText);
+  res.json({ status: 'ok', sent: sentCount });
 });
 
-// 2. Evening Push (09:30 PM / 21:30)
-cron.schedule('30 21 * * *', () => {
-  sendScheduledPush('Evening Reflection 🌙');
+// Server-side Background Push Scheduler (Runs every 1 minute)
+cron.schedule('* * * * *', async () => {
+  if (pushSubscriptions.size === 0) return;
+
+  const now = new Date();
+  const currentHours = String(now.getHours()).padStart(2, '0');
+  const currentMinutes = String(now.getMinutes()).padStart(2, '0');
+  const currentTimeStr = `${currentHours}:${currentMinutes}`;
+
+  const randomQuote = quotes[Math.floor(Math.random() * quotes.length)];
+  const quoteText = randomQuote.author ? `"${randomQuote.text}" — ${randomQuote.author}` : `"${randomQuote.text}"`;
+
+  // 1. Morning Auto Push (07:00 AM)
+  if (currentTimeStr === '07:00') {
+    await broadcastPushNotification('Morning Motivation ☀️', quoteText);
+  }
+
+  // 2. Evening Auto Push (09:30 PM / 21:30)
+  if (currentTimeStr === '21:30') {
+    await broadcastPushNotification('Evening Reflection 🌙', quoteText);
+  }
+
+  // 3. Custom User Reminder Time Push
+  for (const [key, item] of pushSubscriptions.entries()) {
+    if (item.reminderTime === currentTimeStr && currentTimeStr !== '07:00' && currentTimeStr !== '21:30') {
+      const payload = JSON.stringify({
+        title: 'Daily Check-In 🎯',
+        body: `${quoteText} Time for your daily habit check-in!`
+      });
+      try {
+        await webpush.sendNotification(item.subscription, payload);
+        console.log(`⏰ Triggered custom reminder push for user ${item.userId} at ${currentTimeStr}`);
+      } catch (err) {
+        if (err.statusCode === 410 || err.statusCode === 404) {
+          pushSubscriptions.delete(key);
+          saveSubscriptions(pushSubscriptions);
+        }
+      }
+    }
+  }
 });
 
 // Health check endpoint

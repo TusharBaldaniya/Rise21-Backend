@@ -2,6 +2,7 @@ import express from 'express';
 import prisma from '../prisma.js';
 import authMiddleware from '../middleware/auth.js';
 import adminMiddleware from '../middleware/admin.js';
+import { broadcastPushNotification } from '../index.js';
 
 const router = express.Router();
 
@@ -234,6 +235,11 @@ router.post('/announcements', async (req, res) => {
         title,
         message
       }
+    });
+
+    // Immediately dispatch Web Push notification to all active devices
+    broadcastPushNotification(title, message).catch(err => {
+      console.error('Error broadcasting push notification for announcement:', err);
     });
 
     res.status(201).json(newAnnouncement);
