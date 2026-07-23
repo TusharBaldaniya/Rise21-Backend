@@ -1,6 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import webpush from 'web-push';
+import cron from 'node-cron';
 import authRoutes from './routes/auth.js';
 import challengeRoutes from './routes/challenges.js';
 import checkinRoutes from './routes/checkins.js';
@@ -13,6 +15,19 @@ import announcementRoutes from './routes/announcements.js';
 import prisma from './prisma.js';
 
 dotenv.config();
+
+// Web Push VAPID Configuration
+const vapidPublicKey = process.env.VAPID_PUBLIC_KEY || 'BGrdbGwYAZCIMN_HAbUp14Wwgxb2uEZyn2KrCDjxRcoh8lrvEa3OWLxBlLtqXBFmzXjiyJrNbcw-6dGZ3hY6yQw';
+const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY || '8lqt_vvpwSu97VhK2gXs0F48Xv9i0G6CNcfc2-SSSps';
+
+webpush.setVapidDetails(
+  'mailto:tushar.baldaniya@rise21.app',
+  vapidPublicKey,
+  vapidPrivateKey
+);
+
+// In-memory Web Push Subscriptions Store
+const pushSubscriptions = new Map();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -409,9 +424,86 @@ async function seedQuotes() {
 }
 // seedQuotes();
 
+// Web Push Notification Endpoints
+app.get('/api/notifications/vapid-public-key', (req, res) => {
+  res.json({ publicKey: vapidPublicKey });
+});
+
+app.post('/api/notifications/subscribe', (req, res) => {
+  const { subscription, userId } = req.body;
+  if (!subscription || !subscription.endpoint) {
+    return res.status(400).json({ error: 'Invalid subscription object' });
+  }
+
+  const key = subscription.endpoint;
+  pushSubscriptions.set(key, { subscription, userId: userId || 'anonymous', timestamp: Date.now() });
+  console.log(`📡 Registered Web Push Subscription: ${key.substring(0, 30)}...`);
+
+  res.status(201).json({ status: 'subscribed' });
+});
+
+app.post('/api/notifications/test-push', async (req, res) => {
+  const { userId } = req.body;
+  let sentCount = 0;
+
+  const randomQuote = quotes[Math.floor(Math.random() * quotes.length)];
+  const payload = JSON.stringify({
+    title: 'Daily Motivation 🎯',
+    body: randomQuote.author ? `"${randomQuote.text}" — ${randomQuote.author}` : `"${randomQuote.text}"`
+  });
+
+  for (const [key, item] of pushSubscriptions.entries()) {
+    try {
+      await webpush.sendNotification(item.subscription, payload);
+      sentCount++;
+    } catch (err) {
+      console.error('Error sending test push:', err.statusCode);
+      if (err.statusCode === 410 || err.statusCode === 404) {
+        pushSubscriptions.delete(key);
+      }
+    }
+  }
+
+  res.json({ status: 'ok', sent: sentCount });
+});
+
+// Server-side Background Push Scheduler (Runs every minute to check 07:00 AM and 09:30 PM)
+const sendScheduledPush = async (title) => {
+  if (pushSubscriptions.size === 0) return;
+
+  const randomQuote = quotes[Math.floor(Math.random() * quotes.length)];
+  const payload = JSON.stringify({
+    title,
+    body: randomQuote.author ? `"${randomQuote.text}" — ${randomQuote.author}` : `"${randomQuote.text}"`
+  });
+
+  console.log(`⏰ Sending scheduled Web Push notifications: "${title}" to ${pushSubscriptions.size} devices`);
+
+  for (const [key, item] of pushSubscriptions.entries()) {
+    try {
+      await webpush.sendNotification(item.subscription, payload);
+    } catch (err) {
+      console.error('Error sending Web Push notification:', err.statusCode);
+      if (err.statusCode === 410 || err.statusCode === 404) {
+        pushSubscriptions.delete(key);
+      }
+    }
+  }
+};
+
+// 1. Morning Push (07:00 AM)
+cron.schedule('0 7 * * *', () => {
+  sendScheduledPush('Morning Motivation ☀️');
+});
+
+// 2. Evening Push (09:30 PM / 21:30)
+cron.schedule('30 21 * * *', () => {
+  sendScheduledPush('Evening Reflection 🌙');
+});
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date() });
+  res.json({ status: 'ok', timestamp: new Date(), activeSubscriptions: pushSubscriptions.size });
 });
 
 // Error handling middleware
