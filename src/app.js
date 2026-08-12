@@ -512,10 +512,9 @@ app.post('/api/notifications/test-push', async (req, res) => {
 cron.schedule('* * * * *', async () => {
   if (pushSubscriptions.size === 0) return;
 
-  const now = new Date();
-  const currentHours = String(now.getHours()).padStart(2, '0');
-  const currentMinutes = String(now.getMinutes()).padStart(2, '0');
-  const currentTimeStr = `${currentHours}:${currentMinutes}`;
+  // Calculate current HH:MM in Indian Standard Time (Asia/Kolkata IST)
+  const options = { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: false };
+  const currentTimeStr = new Intl.DateTimeFormat('en-GB', options).format(new Date());
 
   const randomQuote = quotes[Math.floor(Math.random() * quotes.length)];
   const quoteText = randomQuote.author ? `"${randomQuote.text}" — ${randomQuote.author}` : `"${randomQuote.text}"`;
