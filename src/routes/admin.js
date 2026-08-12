@@ -2,7 +2,7 @@ import express from 'express';
 import prisma from '../prisma.js';
 import authMiddleware from '../middleware/auth.js';
 import adminMiddleware from '../middleware/admin.js';
-import { broadcastPushNotification } from '../index.js';
+import { broadcastPushNotification } from '../app.js';
 
 const router = express.Router();
 
