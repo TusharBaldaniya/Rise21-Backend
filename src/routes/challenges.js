@@ -7,7 +7,7 @@ const router = express.Router();
 // Create a new challenge
 router.post('/', authMiddleware, async (req, res) => {
   try {
-    const { title, description, startDate, endDate, durationDays, dailyTarget, penaltyAmount, icon, whyStarted } = req.body;
+    const { title, description, startDate, endDate, durationDays, dailyTarget, penaltyAmount, icon, whyStarted, isAvoidance } = req.body;
 
     if (!title || !startDate || !endDate || !durationDays || !dailyTarget) {
       return res.status(400).json({ error: 'Title, start date, end date, duration, and daily target are required.' });
@@ -25,7 +25,8 @@ router.post('/', authMiddleware, async (req, res) => {
         penaltyAmount: parseFloat(penaltyAmount || 0),
         isActive: true,
         icon: icon || '🎯',
-        whyStarted: whyStarted || ''
+        whyStarted: whyStarted || '',
+        isAvoidance: Boolean(isAvoidance)
       }
     });
 
@@ -136,7 +137,7 @@ router.delete('/:id', authMiddleware, async (req, res) => {
 // Update a challenge (e.g. edit title/details or extend duration)
 router.put('/:id', authMiddleware, async (req, res) => {
   try {
-    const { title, description, dailyTarget, penaltyAmount, icon, whyStarted, durationDays } = req.body;
+    const { title, description, dailyTarget, penaltyAmount, icon, whyStarted, durationDays, isAvoidance } = req.body;
     
     const challenge = await prisma.challenge.findFirst({
       where: {
@@ -170,7 +171,8 @@ router.put('/:id', authMiddleware, async (req, res) => {
         icon: icon !== undefined ? icon : challenge.icon,
         whyStarted: whyStarted !== undefined ? whyStarted : challenge.whyStarted,
         durationDays: durationDays !== undefined ? parseInt(durationDays, 10) : challenge.durationDays,
-        endDate: endDateUpdate !== undefined ? endDateUpdate : challenge.endDate
+        endDate: endDateUpdate !== undefined ? endDateUpdate : challenge.endDate,
+        isAvoidance: isAvoidance !== undefined ? Boolean(isAvoidance) : challenge.isAvoidance
       }
     });
 

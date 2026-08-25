@@ -39,6 +39,7 @@ model Challenge {
   checkIns      DailyCheckIn[]
   icon          String?        @default("🎯")
   whyStarted    String?
+  isAvoidance   Boolean        @default(false)
 }
 
 model DailyCheckIn {
