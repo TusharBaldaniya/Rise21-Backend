@@ -119,3 +119,13 @@ model Announcement {
   message   String
   createdAt DateTime @default(now())
 }
+
+model PushSubscription {
+  id           String   @id @default(uuid())
+  endpoint     String   @unique
+  userId       String   @default("anonymous")
+  reminderTime String   @default("20:00")
+  subscription String   // JSON stringified subscription payload
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}

@@ -5,6 +5,7 @@ import webpush from 'web-push';
 import cron from 'node-cron';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import authRoutes from './routes/auth.js';
 import challengeRoutes from './routes/challenges.js';
 import checkinRoutes from './routes/checkins.js';
@@ -418,8 +419,8 @@ async function seedQuotes() {
 }
 // seedQuotes();
 
-// Persistent Disk Storage for Web Push Subscriptions
-const SUBSCRIPTION_FILE = path.join(process.cwd(), 'push_subscriptions.json');
+// Persistent Storage for Web Push Subscriptions (Writable /tmp dir for serverless read-only environments)
+const SUBSCRIPTION_FILE = path.join(os.tmpdir(), 'push_subscriptions.json');
 
 const loadSubscriptions = () => {
   try {
@@ -428,11 +429,11 @@ const loadSubscriptions = () => {
       const list = JSON.parse(data);
       const map = new Map();
       list.forEach(item => {
-        if (item && item.subscription && item.subscription.endpoint) {
-          map.set(item.subscription.endpoint, item);
+        if (item && item.subscription && (item.subscription.endpoint || item.endpoint)) {
+          const ep = item.subscription?.endpoint || item.endpoint;
+          map.set(ep, item);
         }
       });
-      console.log(`📦 Loaded ${map.size} Web Push Subscriptions from disk.`);
       return map;
     }
   } catch (e) {
@@ -457,44 +458,88 @@ app.get('/api/notifications/vapid-public-key', (req, res) => {
   res.json({ publicKey: vapidPublicKey });
 });
 
-app.post('/api/notifications/subscribe', (req, res) => {
+app.post('/api/notifications/subscribe', async (req, res) => {
   const { subscription, userId, reminderTime } = req.body;
   if (!subscription || !subscription.endpoint) {
     return res.status(400).json({ error: 'Invalid subscription object' });
   }
 
-  const key = subscription.endpoint;
-  pushSubscriptions.set(key, {
+  const endpoint = subscription.endpoint;
+  const subPayload = JSON.stringify(subscription);
+  const uId = userId || 'anonymous';
+  const rTime = reminderTime || '20:00';
+
+  // 1. Save in-memory and disk (/tmp)
+  pushSubscriptions.set(endpoint, {
     subscription,
-    userId: userId || 'anonymous',
-    reminderTime: reminderTime || '20:00',
+    userId: uId,
+    reminderTime: rTime,
     timestamp: Date.now()
   });
   saveSubscriptions(pushSubscriptions);
-  console.log(`📡 Registered Web Push Subscription for user ${userId || 'anon'} [Time: ${reminderTime || '20:00'}]`);
+
+  // 2. Save in PostgreSQL Database (Prisma) for serverless persistence across Vercel deployments
+  try {
+    await prisma.pushSubscription.upsert({
+      where: { endpoint },
+      update: {
+        userId: uId,
+        reminderTime: rTime,
+        subscription: subPayload
+      },
+      create: {
+        endpoint,
+        userId: uId,
+        reminderTime: rTime,
+        subscription: subPayload
+      }
+    });
+    console.log(`📡 Registered Web Push Subscription in DB for user ${uId} [Time: ${rTime}]`);
+  } catch (err) {
+    console.error('Error saving subscription to DB:', err);
+  }
 
   res.status(201).json({ status: 'subscribed' });
 });
 
 export const broadcastPushNotification = async (title, body) => {
-  if (pushSubscriptions.size === 0) {
+  const payload = JSON.stringify({ title, body });
+  let subs = [];
+
+  // Fetch subscriptions from database first, fallback to memory/disk
+  try {
+    const dbSubs = await prisma.pushSubscription.findMany();
+    subs = dbSubs.map(s => {
+      let subObj = s.subscription;
+      if (typeof subObj === 'string') {
+        try { subObj = JSON.parse(subObj); } catch (e) {}
+      }
+      return { endpoint: s.endpoint, subscription: subObj };
+    });
+  } catch (e) {
+    subs = Array.from(pushSubscriptions.values());
+  }
+
+  if (subs.length === 0) {
     console.log('📡 No active push subscriptions to broadcast to.');
     return 0;
   }
 
-  const payload = JSON.stringify({ title, body });
   let sentCount = 0;
-  console.log(`📢 Broadcasting Web Push notification: "${title}" to ${pushSubscriptions.size} devices`);
+  console.log(`📢 Broadcasting Web Push notification: "${title}" to ${subs.length} devices`);
 
-  for (const [key, item] of pushSubscriptions.entries()) {
+  for (const item of subs) {
     try {
       await webpush.sendNotification(item.subscription, payload);
       sentCount++;
     } catch (err) {
       console.error('Error sending Web Push notification:', err.statusCode);
       if (err.statusCode === 410 || err.statusCode === 404) {
-        pushSubscriptions.delete(key);
-        saveSubscriptions(pushSubscriptions);
+        if (item.endpoint) {
+          prisma.pushSubscription.delete({ where: { endpoint: item.endpoint } }).catch(() => {});
+          pushSubscriptions.delete(item.endpoint);
+          saveSubscriptions(pushSubscriptions);
+        }
       }
     }
   }
@@ -508,45 +553,88 @@ app.post('/api/notifications/test-push', async (req, res) => {
   res.json({ status: 'ok', sent: sentCount });
 });
 
-// Server-side Background Push Scheduler (Runs every 1 minute)
-cron.schedule('* * * * *', async () => {
-  if (pushSubscriptions.size === 0) return;
+// Vercel Serverless & Railway Cron Push Execution Handler
+const executeCronPush = async (req, res) => {
+  try {
+    const options = { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: false };
+    const currentTimeStr = new Intl.DateTimeFormat('en-GB', options).format(new Date());
 
-  // Calculate current HH:MM in Indian Standard Time (Asia/Kolkata IST)
-  const options = { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: false };
-  const currentTimeStr = new Intl.DateTimeFormat('en-GB', options).format(new Date());
+    const randomQuote = quotes[Math.floor(Math.random() * quotes.length)];
+    const quoteText = randomQuote.author ? `"${randomQuote.text}" — ${randomQuote.author}` : `"${randomQuote.text}"`;
 
-  const randomQuote = quotes[Math.floor(Math.random() * quotes.length)];
-  const quoteText = randomQuote.author ? `"${randomQuote.text}" — ${randomQuote.author}` : `"${randomQuote.text}"`;
+    let dbSubs = [];
+    try {
+      dbSubs = await prisma.pushSubscription.findMany();
+    } catch (e) {
+      dbSubs = Array.from(pushSubscriptions.values()).map(s => ({
+        endpoint: s.subscription.endpoint,
+        subscription: JSON.stringify(s.subscription),
+        userId: s.userId,
+        reminderTime: s.reminderTime
+      }));
+    }
 
-  // 1. Morning Auto Push (07:00 AM)
-  if (currentTimeStr === '07:00') {
-    await broadcastPushNotification('Morning Motivation ☀️', quoteText);
-  }
+    let notificationsSent = 0;
 
-  // 2. Evening Auto Push (09:30 PM / 21:30)
-  if (currentTimeStr === '21:30') {
-    await broadcastPushNotification('Evening Reflection 🌙', quoteText);
-  }
+    // 1. Morning Auto Push (07:00 AM IST)
+    if (currentTimeStr === '07:00') {
+      notificationsSent += await broadcastPushNotification('Morning Motivation ☀️', quoteText);
+    }
 
-  // 3. Custom User Reminder Time Push
-  for (const [key, item] of pushSubscriptions.entries()) {
-    if (item.reminderTime === currentTimeStr && currentTimeStr !== '07:00' && currentTimeStr !== '21:30') {
-      const payload = JSON.stringify({
-        title: 'Daily Check-In 🎯',
-        body: `${quoteText} Time for your daily habit check-in!`
-      });
-      try {
-        await webpush.sendNotification(item.subscription, payload);
-        console.log(`⏰ Triggered custom reminder push for user ${item.userId} at ${currentTimeStr}`);
-      } catch (err) {
-        if (err.statusCode === 410 || err.statusCode === 404) {
-          pushSubscriptions.delete(key);
-          saveSubscriptions(pushSubscriptions);
+    // 2. Evening Auto Push (09:30 PM / 21:30 IST)
+    if (currentTimeStr === '21:30') {
+      notificationsSent += await broadcastPushNotification('Evening Reflection 🌙', quoteText);
+    }
+
+    // 3. Custom User Reminder Time Push
+    for (const item of dbSubs) {
+      if (item.reminderTime === currentTimeStr && currentTimeStr !== '07:00' && currentTimeStr !== '21:30') {
+        try {
+          let subObj = item.subscription;
+          if (typeof subObj === 'string') {
+            try { subObj = JSON.parse(subObj); } catch (e) {}
+          }
+          const payload = JSON.stringify({
+            title: 'Daily Check-In 🎯',
+            body: `${quoteText} Time for your daily habit check-in!`
+          });
+          await webpush.sendNotification(subObj, payload);
+          notificationsSent++;
+        } catch (err) {
+          if (err.statusCode === 410 || err.statusCode === 404) {
+            prisma.pushSubscription.delete({ where: { endpoint: item.endpoint } }).catch(() => {});
+          }
         }
       }
     }
+
+    const responseData = {
+      status: 'ok',
+      timeIST: currentTimeStr,
+      activeSubscriptions: dbSubs.length,
+      notificationsSent
+    };
+
+    if (res) {
+      return res.json(responseData);
+    }
+    return responseData;
+  } catch (err) {
+    console.error('Cron push error:', err);
+    if (res) {
+      return res.status(500).json({ error: 'Cron push execution failed' });
+    }
   }
+};
+
+// Cron endpoints for Vercel Cron Jobs & external heartbeats
+app.get('/api/notifications/cron-push', executeCronPush);
+app.post('/api/notifications/cron-push', executeCronPush);
+app.get('/api/cron', executeCronPush);
+
+// Server-side Background Push Scheduler for long-running environments (Railway / Local)
+cron.schedule('* * * * *', async () => {
+  await executeCronPush(null, null);
 });
 
 // Health check endpoint
