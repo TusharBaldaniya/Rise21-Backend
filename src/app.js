@@ -553,11 +553,23 @@ app.post('/api/notifications/test-push', async (req, res) => {
   res.json({ status: 'ok', sent: sentCount });
 });
 
+// Helper to normalize HH:MM (e.g. "8:00" -> "08:00")
+const normalizeTimeStr = (t) => {
+  if (!t || typeof t !== 'string') return '20:00';
+  const parts = t.trim().split(':');
+  if (parts.length < 2) return t;
+  const h = parts[0].padStart(2, '0');
+  const m = parts[1].padStart(2, '0');
+  return `${h}:${m}`;
+};
+
 // Vercel Serverless & Railway Cron Push Execution Handler
 const executeCronPush = async (req, res) => {
   try {
+    const isForce = req?.query?.force === 'true' || req?.query?.test === 'true';
+
     const options = { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: false };
-    const currentTimeStr = new Intl.DateTimeFormat('en-GB', options).format(new Date());
+    const currentTimeStr = normalizeTimeStr(new Intl.DateTimeFormat('en-GB', options).format(new Date()));
 
     const randomQuote = quotes[Math.floor(Math.random() * quotes.length)];
     const quoteText = randomQuote.author ? `"${randomQuote.text}" — ${randomQuote.author}` : `"${randomQuote.text}"`;
@@ -574,21 +586,31 @@ const executeCronPush = async (req, res) => {
       }));
     }
 
+    if (dbSubs.length === 0 && pushSubscriptions.size > 0) {
+      dbSubs = Array.from(pushSubscriptions.values()).map(s => ({
+        endpoint: s.subscription?.endpoint || s.endpoint,
+        subscription: JSON.stringify(s.subscription),
+        userId: s.userId,
+        reminderTime: s.reminderTime
+      }));
+    }
+
     let notificationsSent = 0;
 
     // 1. Morning Auto Push (07:00 AM IST)
-    if (currentTimeStr === '07:00') {
+    if (currentTimeStr === '07:00' || isForce) {
       notificationsSent += await broadcastPushNotification('Morning Motivation ☀️', quoteText);
     }
 
     // 2. Evening Auto Push (09:30 PM / 21:30 IST)
-    if (currentTimeStr === '21:30') {
+    if (currentTimeStr === '21:30' && !isForce) {
       notificationsSent += await broadcastPushNotification('Evening Reflection 🌙', quoteText);
     }
 
     // 3. Custom User Reminder Time Push
     for (const item of dbSubs) {
-      if (item.reminderTime === currentTimeStr && currentTimeStr !== '07:00' && currentTimeStr !== '21:30') {
+      const userReminder = normalizeTimeStr(item.reminderTime);
+      if (userReminder === currentTimeStr || (isForce && userReminder !== '07:00')) {
         try {
           let subObj = item.subscription;
           if (typeof subObj === 'string') {
@@ -600,9 +622,12 @@ const executeCronPush = async (req, res) => {
           });
           await webpush.sendNotification(subObj, payload);
           notificationsSent++;
+          console.log(`⏰ Triggered custom reminder push for user ${item.userId} at ${currentTimeStr}`);
         } catch (err) {
           if (err.statusCode === 410 || err.statusCode === 404) {
-            prisma.pushSubscription.delete({ where: { endpoint: item.endpoint } }).catch(() => {});
+            if (item.endpoint) {
+              prisma.pushSubscription.delete({ where: { endpoint: item.endpoint } }).catch(() => {});
+            }
           }
         }
       }
@@ -615,6 +640,8 @@ const executeCronPush = async (req, res) => {
       notificationsSent
     };
 
+    console.log(`🤖 Cron Push Executed [IST Time: ${currentTimeStr}]. Sent: ${notificationsSent}`);
+
     if (res) {
       return res.json(responseData);
     }
@@ -622,7 +649,7 @@ const executeCronPush = async (req, res) => {
   } catch (err) {
     console.error('Cron push error:', err);
     if (res) {
-      return res.status(500).json({ error: 'Cron push execution failed' });
+      return res.status(500).json({ error: 'Cron push execution failed', details: err.message });
     }
   }
 };
