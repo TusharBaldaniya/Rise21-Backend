@@ -553,14 +553,26 @@ app.post('/api/notifications/test-push', async (req, res) => {
   res.json({ status: 'ok', sent: sentCount });
 });
 
-// Helper to normalize HH:MM (e.g. "8:00" -> "08:00")
-const normalizeTimeStr = (t) => {
-  if (!t || typeof t !== 'string') return '20:00';
-  const parts = t.trim().split(':');
-  if (parts.length < 2) return t;
-  const h = parts[0].padStart(2, '0');
-  const m = parts[1].padStart(2, '0');
-  return `${h}:${m}`;
+// Helper to parse HH:MM into total minutes of day (e.g. "20:15" -> 1215 minutes)
+const timeToMinutes = (tStr) => {
+  if (!tStr || typeof tStr !== 'string') return 1200; // default 20:00 (8:00 PM)
+  let str = tStr.trim().toUpperCase();
+  let isPM = str.includes('PM');
+  let isAM = str.includes('AM');
+  str = str.replace(/AM|PM/g, '').trim();
+
+  const parts = str.split(':');
+  if (parts.length < 2) return 1200;
+  let hours = parseInt(parts[0], 10);
+  let mins = parseInt(parts[1], 10);
+
+  if (isNaN(hours)) hours = 20;
+  if (isNaN(mins)) mins = 0;
+
+  if (isPM && hours < 12) hours += 12;
+  if (isAM && hours === 12) hours = 0;
+
+  return hours * 60 + mins;
 };
 
 // Vercel Serverless & Railway Cron Push Execution Handler
@@ -568,8 +580,13 @@ const executeCronPush = async (req, res) => {
   try {
     const isForce = req?.query?.force === 'true' || req?.query?.test === 'true';
 
-    const options = { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: false };
-    const currentTimeStr = normalizeTimeStr(new Intl.DateTimeFormat('en-GB', options).format(new Date()));
+    // Current time in IST (Asia/Kolkata)
+    const optionsDate = { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' };
+    const optionsTime = { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: false };
+
+    const todayDateIST = new Intl.DateTimeFormat('en-CA', optionsDate).format(new Date()); // YYYY-MM-DD
+    const currentTimeStr = new Intl.DateTimeFormat('en-GB', optionsTime).format(new Date()); // HH:MM
+    const currentMins = timeToMinutes(currentTimeStr);
 
     const randomQuote = quotes[Math.floor(Math.random() * quotes.length)];
     const quoteText = randomQuote.author ? `"${randomQuote.text}" — ${randomQuote.author}` : `"${randomQuote.text}"`;
@@ -579,51 +596,71 @@ const executeCronPush = async (req, res) => {
       dbSubs = await prisma.pushSubscription.findMany();
     } catch (e) {
       dbSubs = Array.from(pushSubscriptions.values()).map(s => ({
-        endpoint: s.subscription.endpoint,
+        id: s.id || 'tmp-' + Math.random(),
+        endpoint: s.subscription?.endpoint || s.endpoint,
         subscription: JSON.stringify(s.subscription),
         userId: s.userId,
-        reminderTime: s.reminderTime
+        reminderTime: s.reminderTime,
+        lastSentDate: s.lastSentDate
       }));
     }
 
     if (dbSubs.length === 0 && pushSubscriptions.size > 0) {
       dbSubs = Array.from(pushSubscriptions.values()).map(s => ({
+        id: s.id || 'tmp-' + Math.random(),
         endpoint: s.subscription?.endpoint || s.endpoint,
         subscription: JSON.stringify(s.subscription),
         userId: s.userId,
-        reminderTime: s.reminderTime
+        reminderTime: s.reminderTime,
+        lastSentDate: s.lastSentDate
       }));
     }
 
     let notificationsSent = 0;
 
-    // 1. Morning Auto Push (07:00 AM IST)
-    if (currentTimeStr === '07:00' || isForce) {
+    // 1. Morning Auto Push (07:00 AM IST +/- 10 mins window or force)
+    const morningMins = timeToMinutes('07:00');
+    if ((Math.abs(currentMins - morningMins) <= 10 || isForce) && req?.query?.type !== 'reminder') {
       notificationsSent += await broadcastPushNotification('Morning Motivation ☀️', quoteText);
     }
 
-    // 2. Evening Auto Push (09:30 PM / 21:30 IST)
-    if (currentTimeStr === '21:30' && !isForce) {
+    // 2. Evening Auto Push (09:30 PM / 21:30 IST +/- 10 mins window)
+    const eveningMins = timeToMinutes('21:30');
+    if (Math.abs(currentMins - eveningMins) <= 10 && !isForce && req?.query?.type !== 'reminder') {
       notificationsSent += await broadcastPushNotification('Evening Reflection 🌙', quoteText);
     }
 
-    // 3. Custom User Reminder Time Push
+    // 3. Custom User Reminder Push (Window matching within +/- 10 minutes & deduplicated per day)
     for (const item of dbSubs) {
-      const userReminder = normalizeTimeStr(item.reminderTime);
-      if (userReminder === currentTimeStr || (isForce && userReminder !== '07:00')) {
+      const userMins = timeToMinutes(item.reminderTime);
+      const isTimeWindowMatch = Math.abs(currentMins - userMins) <= 10;
+      const alreadySentToday = item.lastSentDate === todayDateIST;
+
+      if ((isTimeWindowMatch && !alreadySentToday) || isForce) {
         try {
           let subObj = item.subscription;
           if (typeof subObj === 'string') {
             try { subObj = JSON.parse(subObj); } catch (e) {}
           }
-          const payload = JSON.stringify({
-            title: 'Daily Check-In 🎯',
-            body: `${quoteText} Time for your daily habit check-in!`
-          });
-          await webpush.sendNotification(subObj, payload);
-          notificationsSent++;
-          console.log(`⏰ Triggered custom reminder push for user ${item.userId} at ${currentTimeStr}`);
+          if (subObj && subObj.endpoint) {
+            const payload = JSON.stringify({
+              title: 'Daily Check-In 🎯',
+              body: `${quoteText} Time for your daily habit check-in!`
+            });
+            await webpush.sendNotification(subObj, payload);
+            notificationsSent++;
+
+            // Record lastSentDate in DB to prevent duplicate pushes today
+            if (item.id && !item.id.startsWith('tmp-')) {
+              prisma.pushSubscription.update({
+                where: { id: item.id },
+                data: { lastSentDate: todayDateIST }
+              }).catch(() => {});
+            }
+            console.log(`⏰ Sent custom reminder push to user ${item.userId} at IST ${currentTimeStr}`);
+          }
         } catch (err) {
+          console.error(`Web Push send error for ${item.userId}:`, err.statusCode || err.message);
           if (err.statusCode === 410 || err.statusCode === 404) {
             if (item.endpoint) {
               prisma.pushSubscription.delete({ where: { endpoint: item.endpoint } }).catch(() => {});
@@ -635,12 +672,13 @@ const executeCronPush = async (req, res) => {
 
     const responseData = {
       status: 'ok',
+      todayIST: todayDateIST,
       timeIST: currentTimeStr,
       activeSubscriptions: dbSubs.length,
       notificationsSent
     };
 
-    console.log(`🤖 Cron Push Executed [IST Time: ${currentTimeStr}]. Sent: ${notificationsSent}`);
+    console.log(`🤖 Cron Push Completed [Date: ${todayDateIST}, Time: ${currentTimeStr}]. Sent: ${notificationsSent}`);
 
     if (res) {
       return res.json(responseData);
