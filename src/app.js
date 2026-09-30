@@ -709,7 +709,10 @@ const executeCronPush = async (req, res) => {
 // Cron endpoints for Vercel Cron Jobs & external heartbeats
 app.get('/api/notifications/cron-push', executeCronPush);
 app.post('/api/notifications/cron-push', executeCronPush);
+app.get('/api/cron-push', executeCronPush);
+app.post('/api/cron-push', executeCronPush);
 app.get('/api/cron', executeCronPush);
+app.post('/api/cron', executeCronPush);
 
 // Server-side Background Push Scheduler for long-running environments (Railway / Local)
 cron.schedule('* * * * *', async () => {
